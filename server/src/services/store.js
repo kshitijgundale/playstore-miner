@@ -7,8 +7,8 @@ export function log(db, operation, params, outcome, possibleCost, sourceRequestI
     .run(operation, JSON.stringify(safe), outcome, possibleCost, sourceRequestId, now(), message?.slice(0, 300) || null);
 }
 export function latestRun(db, p) {
-  return db.prepare(`SELECT * FROM discovery_runs WHERE kind=? AND country=? AND language=? AND category_id IS ? AND chart IS ? AND keyword IS ? ORDER BY fetched_at DESC LIMIT 1`)
-    .get(p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null);
+  return db.prepare(`SELECT * FROM discovery_runs WHERE discovery_source=? AND kind=? AND country=? AND language=? AND category_id IS ? AND chart IS ? AND keyword IS ? ORDER BY fetched_at DESC LIMIT 1`)
+    .get(p.source || 'apps',p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null);
 }
 export function runWithItems(db, id) {
   const run = db.prepare('SELECT * FROM discovery_runs WHERE id=?').get(id);
@@ -24,12 +24,12 @@ function snapshot(db, id, p, src, type, item) {
 }
 export function saveDiscovery(db,p,src) {
   return transaction(db, () => {
-    const existing = db.prepare(`SELECT id FROM discovery_runs WHERE kind=? AND country=? AND language=? AND category_id IS ? AND chart IS ? AND keyword IS ? AND provider='serpapi' AND source_request_id=?`)
-      .get(p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null,src.sourceRequestId);
+    const existing = db.prepare(`SELECT id FROM discovery_runs WHERE discovery_source=? AND kind=? AND country=? AND language=? AND category_id IS ? AND chart IS ? AND keyword IS ? AND provider='serpapi' AND source_request_id=?`)
+      .get(p.source || 'apps',p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null,src.sourceRequestId);
     if (existing) { db.prepare('UPDATE discovery_runs SET fetched_at=? WHERE id=?').run(now(),existing.id); return { run: runWithItems(db,existing.id), repeated: true }; }
     const fetchedAt = now();
-    const id = Number(db.prepare(`INSERT INTO discovery_runs(kind,country,language,category_id,chart,keyword,provider,fetched_at,source_observed_at,source_request_id) VALUES (?,?,?,?,?,?,'serpapi',?,?,?)`)
-      .run(p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null,fetchedAt,src.observedAt,src.sourceRequestId).lastInsertRowid);
+    const id = Number(db.prepare(`INSERT INTO discovery_runs(discovery_source,kind,country,language,category_id,chart,keyword,provider,fetched_at,source_observed_at,source_request_id) VALUES (?,?,?,?,?,?,?,'serpapi',?,?,?)`)
+      .run(p.source || 'apps',p.kind,p.country,p.language,p.categoryId || null,p.chart || null,p.keyword || null,fetchedAt,src.observedAt,src.sourceRequestId).lastInsertRowid);
     const put = db.prepare(`INSERT INTO discovery_items(run_id,package_id,section,display_position,chart_rank,title,developer,category,rating,reported_count,reported_count_source,install_band_text,price_text,icon_url,description,ads_flag,iap_flag,updated_on_text) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     for (const x of src.items) {
       upsertApp(db,x.package_id,fetchedAt);

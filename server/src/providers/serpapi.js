@@ -13,11 +13,11 @@ export class SerpApiProvider {
     if (data.error || data.search_metadata?.status === 'Error') throw new Error(`SerpApi: ${data.error || 'search failed'}`);
     return data;
   }
-  getChart({ country, language, categoryId, chart, forceLive }) {
-    return this.request('/search.json', { engine: 'google_play', store: 'apps', gl: country.toLowerCase(), hl: language, apps_category: categoryId, chart, no_cache: forceLive || undefined });
+  getChart({ source = 'apps', country, language, categoryId, chart, forceLive }) {
+    return this.request('/search.json', { engine: source === 'games' ? 'google_play_games' : 'google_play', ...(source === 'games' ? { games_category: categoryId } : { store: 'apps', apps_category: categoryId }), gl: country.toLowerCase(), hl: language, chart, no_cache: forceLive || undefined });
   }
-  searchApps({ country, language, keyword, forceLive }) {
-    return this.request('/search.json', { engine: 'google_play', store: 'apps', gl: country.toLowerCase(), hl: language, q: keyword, no_cache: forceLive || undefined });
+  searchApps({ source = 'apps', country, language, keyword, forceLive }) {
+    return this.request('/search.json', { engine: source === 'games' ? 'google_play_games' : 'google_play', ...(source === 'games' ? {} : { store: 'apps' }), gl: country.toLowerCase(), hl: language, q: keyword, no_cache: forceLive || undefined });
   }
   getApp({ country, language, packageId, forceLive }) {
     return this.request('/search.json', { engine: 'google_play_product', store: 'apps', gl: country.toLowerCase(), hl: language, product_id: packageId, no_cache: forceLive || undefined });

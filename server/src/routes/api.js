@@ -1,35 +1,47 @@
 import { Router } from 'express';
 import { SerpApiProvider } from '../providers/serpapi.js';
 import { Budget, freshness } from '../services/budget.js';
-import { discovery as validateDiscovery, detail as validateDetail, reviewOptions, locale, packageId, InputError, categories, charts } from '../services/validate.js';
+import { discovery as validateDiscovery, detail as validateDetail, reviewOptions, locale, packageId, InputError, categories, gameCategories, discoverySources, charts } from '../services/validate.js';
 import { discovery as normalizeDiscovery, product, reviewPage } from '../normalize/index.js';
 import { latestRun, runWithItems, saveDiscovery, saveDetail, saveReviews, log, now } from '../services/store.js';
+import { exportOptions, reviewCsvRows } from '../services/review-export.js';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const wrap = fn => (req,res,next) => Promise.resolve().then(() => fn(req,res)).catch(next);
 const json = text => { try { return JSON.parse(text || 'null'); } catch { return null; } };
 const bool = value => value === null || value === undefined ? null : Boolean(value);
+function reviewPagination(query={}) {
+  const parse = (value,fallback) => value === undefined ? fallback : typeof value === 'string' && /^[1-9]\d*$/.test(value) ? Number(value) : NaN;
+  const page = parse(query.page,1), pageSize = parse(query.pageSize,100);
+  if (!Number.isSafeInteger(page) || ![25,50,100,200].includes(pageSize) || !Number.isSafeInteger((page-1)*pageSize)) throw new InputError('Invalid review pagination');
+  return {page,pageSize,offset:(page-1)*pageSize};
+}
 function appView(db,p) {
   const app = db.prepare('SELECT * FROM apps WHERE package_id=?').get(p.packageId);
   if (!app) return null;
   const detail = db.prepare('SELECT * FROM app_details WHERE package_id=? AND country=? AND language=?').get(p.packageId,p.country,p.language);
-  const listing = db.prepare(`SELECT i.*,r.fetched_at,r.country,r.language,r.category_id,r.chart FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1`).get(p.packageId,p.country,p.language);
-  const ranks = db.prepare(`SELECT r.source_observed_at AS observed_at,r.category_id,r.chart,i.chart_rank FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.kind='chart' AND r.country=? AND r.language=? ORDER BY r.source_observed_at`).all(p.packageId,p.country,p.language);
+  const listing = db.prepare(`SELECT i.*,r.fetched_at,r.country,r.language,r.discovery_source,r.category_id,r.chart FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1`).get(p.packageId,p.country,p.language);
+  const ranks = db.prepare(`SELECT r.source_observed_at AS observed_at,r.discovery_source,r.country,r.language,r.category_id,r.chart,i.chart_rank FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.kind='chart' AND r.country=? AND r.language=? ORDER BY r.source_observed_at`).all(p.packageId,p.country,p.language);
   const snapshots = db.prepare(`SELECT * FROM app_snapshots WHERE package_id=? AND country=? AND language=? ORDER BY observed_at`).all(p.packageId,p.country,p.language);
   return { app, listing: listing || null, detail: detail ? { ...detail, screenshots: json(detail.screenshots_json), related: json(detail.related_json), ratingDistribution: json(detail.rating_distribution_json), productMetadata: json(detail.product_metadata_json), ads_flag: bool(detail.ads_flag), iap_flag: bool(detail.iap_flag) } : null, history: { ranks, snapshots } };
 }
 function savedReviews(db,p,query={}) {
+  const {page,pageSize,offset}=reviewPagination(query);
   const stars = query.stars ? Number(query.stars) : null;
   if (stars !== null && ![1,2,3,4,5].includes(stars)) throw new InputError('Invalid star filter');
-  const order = query.sort === 'helpful' ? 'likes DESC' : query.sort === 'oldest' ? 'review_date ASC' : 'review_date DESC';
-  const reviews = db.prepare(`SELECT * FROM reviews WHERE package_id=? AND country=? AND language=? AND (? IS NULL OR stars=?) ORDER BY ${order} LIMIT 1000`).all(p.packageId,p.country,p.language,stars,stars);
+  const order = query.sort === 'helpful' ? 'likes DESC,review_id ASC' : query.sort === 'oldest' ? 'review_date ASC,review_id ASC' : 'review_date DESC,review_id ASC';
+  const filter=[p.packageId,p.country,p.language,stars,stars];
+  const total=db.prepare('SELECT COUNT(*) AS count FROM reviews WHERE package_id=? AND country=? AND language=? AND (? IS NULL OR stars=?)').get(...filter).count;
+  const reviews = db.prepare(`SELECT * FROM reviews WHERE package_id=? AND country=? AND language=? AND (? IS NULL OR stars=?) ORDER BY ${order} LIMIT ? OFFSET ?`).all(...filter,pageSize,offset);
   const coverage = db.prepare(`SELECT rating_filter,source_sort,requested_page_token,next_page_token,result_count,fetched_at FROM review_fetches WHERE package_id=? AND country=? AND language=? ORDER BY fetched_at DESC`).all(p.packageId,p.country,p.language);
   const sampleDistribution = db.prepare(`SELECT stars,COUNT(*) AS count FROM reviews WHERE package_id=? AND country=? AND language=? GROUP BY stars ORDER BY stars`).all(p.packageId,p.country,p.language);
   const count = db.prepare('SELECT COUNT(*) AS count FROM reviews WHERE package_id=? AND country=? AND language=?').get(p.packageId,p.country,p.language).count;
-  return { reviews, coverage, sampleDistribution, storedCount: count };
+  return { reviews, total, page, pageSize, coverage, sampleDistribution, storedCount: count };
 }
 export function createApi({ db, provider = new SerpApiProvider(), budget = new Budget(db,provider) }) {
   const router = Router();
-  router.get('/config', (req,res) => res.json({ categories, charts }));
+  router.get('/config', (req,res) => res.json({ categories: { apps: categories, games: gameCategories }, sources: discoverySources, charts }));
   router.get('/usage', wrap(async (req,res) => res.json(await budget.usage(req.query.refresh === 'true'))));
   router.post('/fetch/preview', wrap(async (req,res) => {
     const op = req.body.operation;
@@ -47,7 +59,11 @@ export function createApi({ db, provider = new SerpApiProvider(), budget = new B
     });
     res.json({ ...result.run, sourceState: result.repeated ? 'provider_cache' : 'provider', freshness: 'fresh' });
   }));
-  router.get('/discoveries', (req,res) => res.json(db.prepare('SELECT * FROM discovery_runs ORDER BY fetched_at DESC LIMIT 50').all()));
+  router.get('/discoveries', wrap((req,res) => {
+    const source = req.query.source;
+    if (source !== undefined && !discoverySources.includes(source)) throw new InputError('Invalid discovery source');
+    res.json(source ? db.prepare('SELECT * FROM discovery_runs WHERE discovery_source=? ORDER BY fetched_at DESC LIMIT 50').all(source) : db.prepare('SELECT * FROM discovery_runs ORDER BY fetched_at DESC LIMIT 50').all());
+  }));
   router.get('/discoveries/:id/items', (req,res) => { const row=runWithItems(db,Number(req.params.id)); row ? res.json(row) : res.status(404).json({ error:'Run not found' }); });
   router.get('/apps/:packageId', wrap(async (req,res) => {
     const p = { packageId: packageId(req.params.packageId), ...locale(req.query) }, row = appView(db,p);
@@ -66,9 +82,19 @@ export function createApi({ db, provider = new SerpApiProvider(), budget = new B
   router.get('/apps/:packageId/reviews', wrap(async (req,res) => {
     res.json(savedReviews(db,{ packageId:packageId(req.params.packageId),...locale(req.query) },req.query));
   }));
+  router.get('/apps/:packageId/reviews/export', wrap(async (req,res) => {
+    const options=exportOptions(req.params.packageId,req.query);
+    const filename=`reviews-${options.packageId}-${options.country}-${options.language}-${options.scope}.csv`;
+    res.attachment(filename);
+    res.set('Content-Type','text/csv; charset=utf-8');
+    await pipeline(Readable.from(reviewCsvRows(db,options)),res);
+  }));
   router.get('/apps/:packageId/reviews/marked', wrap(async (req,res) => {
     const p={ packageId:packageId(req.params.packageId),...locale(req.query) };
-    res.json(db.prepare('SELECT * FROM reviews WHERE package_id=? AND country=? AND language=? AND marked_at IS NOT NULL ORDER BY marked_at DESC,review_id').all(p.packageId,p.country,p.language));
+    const {page,pageSize,offset}=reviewPagination(req.query), args=[p.packageId,p.country,p.language];
+    const total=db.prepare('SELECT COUNT(*) AS count FROM reviews WHERE package_id=? AND country=? AND language=? AND marked_at IS NOT NULL').get(...args).count;
+    const reviews=db.prepare('SELECT * FROM reviews WHERE package_id=? AND country=? AND language=? AND marked_at IS NOT NULL ORDER BY marked_at DESC,review_id ASC LIMIT ? OFFSET ?').all(...args,pageSize,offset);
+    res.json({reviews,total,page,pageSize});
   }));
   router.patch('/apps/:packageId/reviews/:reviewId/mark', wrap(async (req,res) => {
     const p={ packageId:packageId(req.params.packageId),reviewId:req.params.reviewId,...locale(req.body) };

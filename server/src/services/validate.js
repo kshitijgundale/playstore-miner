@@ -2,6 +2,8 @@ export class InputError extends Error { constructor(message) { super(message); t
 const fail = message => { throw new InputError(message); };
 const codes = /^[a-z]{2}$/i;
 export const categories = ['APPLICATION','ART_AND_DESIGN','AUTO_AND_VEHICLES','BEAUTY','BOOKS_AND_REFERENCE','BUSINESS','COMICS','COMMUNICATION','DATING','EDUCATION','ENTERTAINMENT','EVENTS','FINANCE','FOOD_AND_DRINK','HEALTH_AND_FITNESS','HOUSE_AND_HOME','LIFESTYLE','MAPS_AND_NAVIGATION','MEDICAL','MUSIC_AND_AUDIO','NEWS_AND_MAGAZINES','PARENTING','PERSONALIZATION','PHOTOGRAPHY','PRODUCTIVITY','SHOPPING','SOCIAL','SPORTS','TOOLS','TRAVEL_AND_LOCAL','VIDEO_PLAYERS','WEATHER'];
+export const gameCategories = ['GAME','GAME_ACTION','GAME_ADVENTURE','GAME_ARCADE','GAME_BOARD','GAME_CARD','GAME_CASINO','GAME_CASUAL','GAME_EDUCATIONAL','GAME_MUSIC','GAME_PUZZLE','GAME_RACING','GAME_ROLE_PLAYING','GAME_SIMULATION','GAME_SPORTS','GAME_STRATEGY','GAME_TRIVIA','GAME_WORD'];
+export const discoverySources = ['apps','games'];
 export const charts = ['topselling_free','topselling_paid','topgrossing'];
 export function locale(body = {}) {
   const country = String(body.country ?? 'US').toUpperCase();
@@ -17,12 +19,14 @@ export function packageId(value) {
 export function discovery(body = {}) {
   const kind = body.kind;
   if (!['chart','search'].includes(kind)) fail('Invalid discovery kind');
-  const result = { kind, ...locale(body), refresh: body.refresh === true, forceLive: body.forceLive === true };
+  const source = body.source ?? 'apps';
+  if (!discoverySources.includes(source)) fail('Invalid discovery source');
+  const result = { kind, source, ...locale(body), refresh: body.refresh === true, forceLive: body.forceLive === true };
   if (result.forceLive && !result.refresh) fail('Force live requires refresh');
   if (kind === 'chart') {
     result.categoryId = String(body.categoryId || '').toUpperCase();
     result.chart = String(body.chart || 'topselling_free');
-    if (!categories.includes(result.categoryId) || !charts.includes(result.chart)) fail('Unsupported category or chart');
+    if (!(source === 'apps' ? categories : gameCategories).includes(result.categoryId) || !charts.includes(result.chart)) fail('Unsupported category or chart');
   } else {
     result.keyword = String(body.keyword || '').trim().replace(/\s+/g, ' ');
     if (!result.keyword || result.keyword.length > 100) fail('Keyword must be 1–100 characters');

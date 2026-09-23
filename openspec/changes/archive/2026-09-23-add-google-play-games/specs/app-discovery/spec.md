@@ -1,8 +1,5 @@
-# app-discovery Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change play-store-miner-mvp. Update Purpose after archive.
-## Requirements
 ### Requirement: Explore a category chart
 The system SHALL let the user select Apps or Games, a country, a supported category for that source, and a Top Free, Top Paid, or Top Grossing chart and obtain a saved result set. Category charts SHALL be the default discovery view in each source tab.
 
@@ -33,6 +30,8 @@ The system SHALL let the user search Google Play from either the Apps or Games t
 - **WHEN** a keyword has a fresh Apps run but no Games run for the same locale
 - **THEN** a Games search is treated as a separate request with its own quota preview and saved run
 
+## ADDED Requirements
+
 ### Requirement: Navigate separate Apps and Games discovery tabs
 The system SHALL show Apps and Games as separate top-level discovery tabs. Each tab SHALL provide the existing category-chart and keyword-search workflows, with category charts shown first and saved runs limited to the selected source. Opening a discovered product SHALL continue to use the shared app detail, review, and shortlist workflows.
 
@@ -47,18 +46,3 @@ The system SHALL show Apps and Games as separate top-level discovery tabs. Each 
 #### Scenario: Existing saved discovery data
 - **WHEN** a database created before Games support is opened after migration
 - **THEN** its saved discovery runs remain available in Apps with their items and observations intact
-
-### Requirement: Honest and useful discovery table
-The system SHALL show available rank, icon, name, developer, category, rating, reported count, install band, paid price, ads, IAP, and update information in a locally sortable and filterable table. Fields not returned for an item SHALL be shown as unknown.
-
-#### Scenario: Chart result order
-- **WHEN** an item came from a chart response
-- **THEN** its rank is its position in that specific saved chart run
-
-#### Scenario: Keyword result order
-- **WHEN** an item came from a keyword response
-- **THEN** the UI identifies its position as result order and does not label it chart rank
-
-#### Scenario: Missing monetization field
-- **WHEN** the listing response has no ad, IAP, or price field for an app
-- **THEN** the table shows unknown rather than assuming no ads, no IAP, or free
