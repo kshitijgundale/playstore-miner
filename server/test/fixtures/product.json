@@ -1,0 +1,100 @@
+{
+  "search_metadata": {
+    "id": "product-1",
+    "created_at": "2026-09-20 12:00:00 UTC",
+    "status": "Success"
+  },
+  "product_info": {
+    "title": "Alpha",
+    "authors": [
+      {
+        "name": "Maker"
+      }
+    ],
+    "rating": 4.3,
+    "reviews": 1250,
+    "downloads": "10,000+",
+    "price": "$2.99",
+    "contains_ads": true,
+    "in_app_purchases": "$0.99\u2013$9.99",
+    "content_rating": {
+      "text": "Everyone"
+    },
+    "extensions": [
+      "Contains ads",
+      "In-app purchases"
+    ],
+    "editors_choice": true
+  },
+  "media": {
+    "images": [
+      "https://example.test/one.png"
+    ],
+    "video": {
+      "link": "https://example.test/video",
+      "thumbnail": "https://example.test/video.png"
+    }
+  },
+  "similar_results": [
+    {
+      "title": "Similar apps",
+      "items": [
+        {
+          "product_id": "com.example.gamma",
+          "title": "Gamma"
+        }
+      ]
+    }
+  ],
+  "about_this_app": {
+    "snippet": "A helpful app",
+    "released_on": "Jan 5, 2020",
+    "updated_on": "Sep 3, 2026",
+    "downloads": "10,000+",
+    "in_app_purchases": "$0.99 - $9.99 per item",
+    "offered_by": "Maker LLC",
+    "interactive_elements": "Users Interact",
+    "permissions": [
+      {
+        "type": "Camera",
+        "details": [
+          "take pictures"
+        ]
+      }
+    ]
+  },
+  "updated_on": "Sep 3, 2026",
+  "categories": [
+    {
+      "name": "Productivity"
+    }
+  ],
+  "badges": [
+    {
+      "name": "Editors Choice"
+    }
+  ],
+  "what_s_new": {
+    "snippet": "Improved performance"
+  },
+  "developer_contact": {
+    "name": "Maker LLC",
+    "website": "https://example.test",
+    "support_email": "help@example.test"
+  },
+  "data_safety": [
+    {
+      "text": "Data encrypted in transit",
+      "subtext": "Declared by developer"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "featured-1",
+      "rating": 5,
+      "snippet": "Great",
+      "likes": 3,
+      "date": "2026-09-01"
+    }
+  ]
+}
