@@ -1,17 +1,20 @@
 const BASE = 'https://serpapi.com';
 export class SerpApiProvider {
-  constructor({ apiKey = process.env.SERPAPI_API_KEY, fetchImpl = fetch } = {}) {
-    this.apiKey = apiKey; this.fetchImpl = fetchImpl;
+  constructor({ apiKey = process.env.SERPAPI_API_KEY, getApiKey, fetchImpl = fetch } = {}) {
+    this.getApiKey = getApiKey || (() => apiKey); this.fetchImpl = fetchImpl;
   }
   async request(path, params = {}) {
-    if (!this.apiKey) throw new Error('SERPAPI_API_KEY is not configured');
+    const apiKey = this.getApiKey();
+    if (!apiKey) throw new Error('SerpApi key is not configured. Open desktop settings to add it.');
     const url = new URL(path, BASE);
-    for (const [key, value] of Object.entries({ ...params, api_key: this.apiKey })) if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
-    const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(45000) });
-    if (!response.ok) throw new Error(`SerpApi HTTP ${response.status}`);
-    const data = await response.json();
-    if (data.error || data.search_metadata?.status === 'Error') throw new Error(`SerpApi: ${data.error || 'search failed'}`);
-    return data;
+    for (const [key, value] of Object.entries({ ...params, api_key: apiKey })) if (value !== null && value !== undefined) url.searchParams.set(key, String(value));
+    try {
+      const response = await this.fetchImpl(url, { signal: AbortSignal.timeout(45000) });
+      if (!response.ok) throw new Error('SerpApi request failed');
+      const data = await response.json();
+      if (data.error || data.search_metadata?.status === 'Error') throw new Error('SerpApi request failed');
+      return data;
+    } catch { throw new Error('SerpApi request failed'); }
   }
   getChart({ source = 'apps', country, language, categoryId, chart, forceLive }) {
     return this.request('/search.json', { engine: source === 'games' ? 'google_play_games' : 'google_play', ...(source === 'games' ? { games_category: categoryId } : { store: 'apps', apps_category: categoryId }), gl: country.toLowerCase(), hl: language, chart, no_cache: forceLive || undefined });

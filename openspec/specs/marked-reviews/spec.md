@@ -59,3 +59,14 @@ The system SHALL show every marked review for the current app and locale in a se
 #### Scenario: Unmark the final review on a page
 - **WHEN** the user unmarks the only review on a later marked-review page
 - **THEN** the view moves to the nearest remaining page and updates its count and range without a provider request
+
+### Requirement: Focus marked-review evidence
+The Marked reviews view SHALL use the same readable review and note-editing pattern as saved reviews, while preserving mark state, local pagination, and the ability to unmark a review.
+
+#### Scenario: Review has a saved note
+- **WHEN** a marked review has a saved note
+- **THEN** the note is visible or clearly discoverable and remains editable without a provider request
+
+#### Scenario: Unmark review
+- **WHEN** the user unmarks a review
+- **THEN** the view updates its local count and page state according to the existing marked-review behavior

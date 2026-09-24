@@ -21,7 +21,7 @@ function appView(db,p) {
   const app = db.prepare('SELECT * FROM apps WHERE package_id=?').get(p.packageId);
   if (!app) return null;
   const detail = db.prepare('SELECT * FROM app_details WHERE package_id=? AND country=? AND language=?').get(p.packageId,p.country,p.language);
-  const listing = db.prepare(`SELECT i.*,r.fetched_at,r.country,r.language,r.discovery_source,r.category_id,r.chart FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1`).get(p.packageId,p.country,p.language);
+  const listing = db.prepare(`SELECT i.*,r.fetched_at,r.source_observed_at AS listing_source_observed_at,r.country,r.language,r.discovery_source,r.category_id,r.chart FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1`).get(p.packageId,p.country,p.language);
   const ranks = db.prepare(`SELECT r.source_observed_at AS observed_at,r.discovery_source,r.country,r.language,r.category_id,r.chart,i.chart_rank FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=? AND r.kind='chart' AND r.country=? AND r.language=? ORDER BY r.source_observed_at`).all(p.packageId,p.country,p.language);
   const snapshots = db.prepare(`SELECT * FROM app_snapshots WHERE package_id=? AND country=? AND language=? ORDER BY observed_at`).all(p.packageId,p.country,p.language);
   return { app, listing: listing || null, detail: detail ? { ...detail, screenshots: json(detail.screenshots_json), related: json(detail.related_json), ratingDistribution: json(detail.rating_distribution_json), productMetadata: json(detail.product_metadata_json), ads_flag: bool(detail.ads_flag), iap_flag: bool(detail.iap_flag) } : null, history: { ranks, snapshots } };
@@ -140,8 +140,10 @@ export function createApi({ db, provider = new SerpApiProvider(), budget = new B
     const rows=db.prepare(`SELECT a.*,d.title AS detail_title,d.rating AS detail_rating,d.reported_count AS detail_count,d.price_text AS detail_price,d.ads_flag,d.iap_flag,d.install_band_text AS detail_installs,d.source_observed_at AS detail_observed_at,d.fetched_at AS detail_fetched_at,
       (SELECT COUNT(*) FROM reviews v WHERE v.package_id=a.package_id AND v.country=? AND v.language=?) AS review_count,
       (SELECT i.title FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=a.package_id AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1) AS listing_title,
+      (SELECT i.rating FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=a.package_id AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1) AS listing_rating,
+      (SELECT i.install_band_text FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=a.package_id AND r.country=? AND r.language=? ORDER BY r.fetched_at DESC LIMIT 1) AS listing_installs,
       (SELECT MAX(r.source_observed_at) FROM discovery_items i JOIN discovery_runs r ON r.id=i.run_id WHERE i.package_id=a.package_id AND r.country=? AND r.language=?) AS listing_observed_at
-      FROM apps a LEFT JOIN app_details d ON d.package_id=a.package_id AND d.country=? AND d.language=? WHERE a.shortlisted_at IS NOT NULL ORDER BY a.research_updated_at DESC`).all(country,language,country,language,country,language,country,language);
+      FROM apps a LEFT JOIN app_details d ON d.package_id=a.package_id AND d.country=? AND d.language=? WHERE a.shortlisted_at IS NOT NULL ORDER BY a.research_updated_at DESC`).all(country,language,country,language,country,language,country,language,country,language,country,language);
     res.json(rows);
   });
   router.get('/dashboard', wrap(async (req,res) => {

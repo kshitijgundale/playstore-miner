@@ -6,7 +6,17 @@ A local, single-user Google Play research tool. It saves Apps and Games category
 
 Requires Node.js 24 or newer (for `node:sqlite`). Run `npm install`, copy `.env.example` to `.env`, and set `SERPAPI_API_KEY` in `.env`. Then run `npm run dev` and open the Vite URL printed by the client. Express listens on `127.0.0.1:3001`; Vite proxies `/api` to it. The default locale is `US/en`; country and language are stored with each observation. Run `npm run build` and `npm test` for checks. Tests use a mock provider and never use live SerpApi quota.
 
-The SQLite database is `data/miner.sqlite` by default. Change `DATA_DIR` to store it elsewhere. The `data/` directory, `.env`, `node_modules/`, and build output are gitignored. Only run one server process against this database: the quota reservation is in-process.
+The browser server's SQLite database is `server/data/miner.sqlite` by default when started through the npm workspace scripts. Change `DATA_DIR` to store it elsewhere. The data directories, `.env`, `node_modules/`, and build output are gitignored. Only run one server process against this database: the quota reservation is in-process.
+
+## macOS desktop app
+
+On an Apple Silicon Mac, run `npm install` and `npm run desktop:package`. The local app is created at `out/Play Store Miner-darwin-arm64/Play Store Miner.app`. Open it in Finder or run `open "out/Play Store Miner-darwin-arm64/Play Store Miner.app"`. The app starts its own private local API and built UI; Vite and the browser server do not need to be running. This is an unsigned local build, not an installer.
+
+To move existing research before launching the app, quit the browser server and run `npm run desktop:migrate-data`. The command moves `server/data/miner.sqlite` to the desktop data directory using SQLite's online backup, including committed WAL records. It validates the new database and record counts before removing the old database and its WAL files. It refuses to overwrite an existing desktop database. The app then opens the desktop database immediately; if none exists, it creates a new empty one. Check saved apps, reviews, shortlist selections, and notes before using live provider actions.
+
+Open **Settings** in the desktop sidebar to save a SerpApi key. You can replace or clear it there. The key is stored in a user-only file outside the app and is not returned to the UI. Saved research works without a key; live fetches need one. The desktop data directory is `~/Library/Application Support/Play Store Miner/miner/`; it contains `miner.sqlite` and, when configured, `settings.json`. The exact path is shown in Settings. **Quit the app before copying `miner.sqlite` for backup** so SQLite can finish its WAL writes. Store the backup somewhere else. The app bundle includes neither `.env` nor repository research databases.
+
+To return to the browser workflow, quit the desktop app and point `DATA_DIR` at `~/Library/Application Support/Play Store Miner/miner` before running `npm run dev`. Only run one app or browser server against this database at a time. If you want a separate browser copy, restore one from backup into `server/data/` instead.
 
 ## Requests and quota
 
@@ -24,7 +34,7 @@ SerpApi provider calls live in `server/src/providers/serpapi.js` behind four dat
 
 ## Backup
 
-Stop the server before copying `data/miner.sqlite` to a backup location, or use SQLite's online backup command. Keep backups outside `data/` if they should be versioned. Migrations run on startup in filename order within transactions; a migration failure stops startup.
+Stop the browser server before copying `server/data/miner.sqlite` to a backup location, or use SQLite's online backup command. Keep backups outside `server/data/` if they should be versioned. Migrations run on startup in filename order within transactions; a migration failure stops startup.
 
 ## Source documentation
 
